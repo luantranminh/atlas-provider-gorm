@@ -1,11 +1,14 @@
 package gormschema
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
+	"embed"
 	"errors"
 	"fmt"
 	"slices"
+	"text/template"
 
 	"ariga.io/atlas-go-sdk/recordriver"
 	"gorm.io/driver/mysql"
@@ -94,17 +97,20 @@ func (l *Loader) Load(models ...any) (string, error) {
 	if err = db.AutoMigrate(models...); err != nil {
 		return "", err
 	}
+	db, err = gorm.Open(dialector{
+		Dialector: di,
+	}, l.config)
+	if err != nil {
+		return "", err
+	}
+	cm, ok := db.Migrator().(*migrator)
+	if !ok {
+		return "", err
+	}
+
+	cm.CreateTriggers(models...)
 	if !l.config.DisableForeignKeyConstraintWhenMigrating && l.dialect != "sqlite" {
-		db, err = gorm.Open(dialector{
-			Dialector: di,
-		}, l.config)
-		if err != nil {
-			return "", err
-		}
-		cm, ok := db.Migrator().(*migrator)
-		if !ok {
-			return "", err
-		}
+
 		if err = cm.CreateConstraints(models); err != nil {
 			return "", err
 		}
@@ -179,6 +185,45 @@ func (m *migrator) CreateConstraints(models []any) error {
 	return nil
 }
 
+func (m *migrator) CreateTriggers(models ...any) error {
+	for _, model := range models {
+		model, hasTrigger := model.(interface{ Triggers() []Trigger })
+		if !hasTrigger {
+			continue
+		}
+
+		for _, trigger := range model.Triggers() {
+			stmt, err := trigger.String(m.Dialector.Name())
+			if err != nil {
+				return err
+			}
+			if err = m.DB.Exec(stmt).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func CreateTriggers(models ...any) error {
+	for _, model := range models {
+		model, hasTrigger := model.(interface{ Triggers() []Trigger })
+		if !hasTrigger {
+			continue
+		}
+		for _, trigger := range model.Triggers() {
+			stmt, err := trigger.String("mysql")
+			if err != nil {
+				return err
+			}
+			fmt.Println(stmt)
+		}
+	}
+
+	return nil
+}
+
 // WithJoinTable sets up a join table for the given model and field.
 func WithJoinTable(model any, field string, jointable any) Option {
 	return func(l *Loader) {
@@ -186,4 +231,49 @@ func WithJoinTable(model any, field string, jointable any) Option {
 			return db.SetupJoinTable(model, field, jointable)
 		})
 	}
+}
+
+type TriggerTime string
+type TriggerFor string
+type TriggerEvent string
+
+const (
+	TriggerBefore    TriggerTime = "BEFORE"
+	TriggerAfter     TriggerTime = "AFTER"
+	TriggerInsteadOf TriggerTime = "INSTEAD OF"
+)
+
+const (
+	TriggerForRow  TriggerFor = "ROW"
+	TriggerForStmt TriggerFor = "STATEMENT"
+)
+
+const (
+	TriggerEventInsert   TriggerEvent = "INSERT"
+	TriggerEventUpdate   TriggerEvent = "UPDATE"
+	TriggerEventDelete   TriggerEvent = "DELETE"
+	TriggerEventTruncate TriggerEvent = "TRUNCATE"
+)
+
+type Trigger struct {
+	Name       string
+	ActionTime TriggerTime  // BEFORE, AFTER, or INSTEAD OF.
+	Event      TriggerEvent // INSERT, UPDATE, DELETE, etc.
+	For        TriggerFor   // FOR EACH ROW or FOR EACH STATEMENT.
+	Body       string       // Trigger body only.
+}
+
+//go:embed templates/triggers/*.tmpl
+var triggerTemplates embed.FS
+
+func (t Trigger) String(dialect string) (string, error) {
+	tmpl, err := template.ParseFS(triggerTemplates, fmt.Sprintf("templates/triggers/%s.tmpl", dialect))
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, t); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

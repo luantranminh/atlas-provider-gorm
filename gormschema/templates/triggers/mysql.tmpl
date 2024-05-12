@@ -1,0 +1,6 @@
+CREATE TRIGGER {{ .Name }}
+{{ .ActionTime }} {{ .Event }} ON 
+FOR EACH ROW
+BEGIN
+   {{ .Body }}
+END
