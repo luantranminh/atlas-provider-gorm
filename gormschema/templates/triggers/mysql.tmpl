@@ -1,5 +1,5 @@
 CREATE TRIGGER {{ .Name }}
-{{ .ActionTime }} {{ .Event }} ON 
+{{ .ActionTime }} {{ .Event }} ON {{ .Table }}
 FOR EACH ROW
 BEGIN
    {{ .Body }}

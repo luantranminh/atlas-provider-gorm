@@ -107,10 +107,10 @@ func (l *Loader) Load(models ...any) (string, error) {
 	if !ok {
 		return "", err
 	}
-
-	cm.CreateTriggers(models...)
+	if err = cm.CreateTriggers(models...); err != nil {
+		return "", err
+	}
 	if !l.config.DisableForeignKeyConstraintWhenMigrating && l.dialect != "sqlite" {
-
 		if err = cm.CreateConstraints(models); err != nil {
 			return "", err
 		}
@@ -191,36 +191,25 @@ func (m *migrator) CreateTriggers(models ...any) error {
 		if !hasTrigger {
 			continue
 		}
-
 		for _, trigger := range model.Triggers() {
-			stmt, err := trigger.String(m.Dialector.Name())
+			err := m.Migrator.RunWithValue(model, func(stmt *gorm.Statement) error {
+				if trigger.Table == "" {
+					trigger.Table = stmt.Schema.Table
+				}
+				createTriggerSQL, err := trigger.toSQL(m.Dialector.Name())
+				if err != nil {
+					return err
+				}
+				if err = m.DB.Exec(createTriggerSQL).Error; err != nil {
+					return err
+				}
+				return nil
+			})
 			if err != nil {
-				return err
-			}
-			if err = m.DB.Exec(stmt).Error; err != nil {
 				return err
 			}
 		}
 	}
-
-	return nil
-}
-
-func CreateTriggers(models ...any) error {
-	for _, model := range models {
-		model, hasTrigger := model.(interface{ Triggers() []Trigger })
-		if !hasTrigger {
-			continue
-		}
-		for _, trigger := range model.Triggers() {
-			stmt, err := trigger.String("mysql")
-			if err != nil {
-				return err
-			}
-			fmt.Println(stmt)
-		}
-	}
-
 	return nil
 }
 
@@ -261,19 +250,20 @@ type Trigger struct {
 	Event      TriggerEvent // INSERT, UPDATE, DELETE, etc.
 	For        TriggerFor   // FOR EACH ROW or FOR EACH STATEMENT.
 	Body       string       // Trigger body only.
+	Table      string
 }
 
 //go:embed templates/triggers/*.tmpl
 var triggerTemplates embed.FS
 
-func (t Trigger) String(dialect string) (string, error) {
+func (t Trigger) toSQL(dialect string) (string, error) {
 	tmpl, err := template.ParseFS(triggerTemplates, fmt.Sprintf("templates/triggers/%s.tmpl", dialect))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, t); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 	return buf.String(), nil
 }

@@ -11,6 +11,10 @@ type User struct {
 	Pets []Pet
 }
 
+func (User) TableName() string {
+	return "users_custom_name"
+}
+
 func (User) Triggers() []gormschema.Trigger {
 	return []gormschema.Trigger{
 		{

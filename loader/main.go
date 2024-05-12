@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	_ "ariga.io/atlas-go-sdk/recordriver"
@@ -13,19 +14,13 @@ import (
 )
 
 func main() {
-	_, err := gormschema.New("mysql").
+	stmts, err := gormschema.New("mysql").
 		Load(models.Pet{}, models.User{}, ckmodels.Event{}, ckmodels.Location{})
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load gorm schema: %v\n", err)
 		os.Exit(1)
 	}
-	// io.WriteString(os.Stdout, stmts)
-
-	err = gormschema.CreateTriggers(models.User{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create triggers: %v\n", err)
-		os.Exit(1)
-	}
+	io.WriteString(os.Stdout, stmts)
 
 }
