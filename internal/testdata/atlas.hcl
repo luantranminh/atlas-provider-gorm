@@ -16,7 +16,7 @@ data "external_schema" "gorm" {
     "go",
     "run",
     "-mod=mod",
-    "ariga.io/atlas-provider-gorm",
+    "github.com/luantranminh/atlas-provider-gorm",
     "load",
     "--path", "./models",
     "--dialect", var.dialect,

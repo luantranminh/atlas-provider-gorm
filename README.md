@@ -24,7 +24,7 @@ See [atlasgo.io](https://atlasgo.io/getting-started#installation) for more insta
 
 Install the provider by running:
 ```bash
-go get -u ariga.io/atlas-provider-gorm
+go get -u github.com/luantranminh/atlas-provider-gorm
 ``` 
 
 #### Standalone 
@@ -40,7 +40,7 @@ data "external_schema" "gorm" {
     "go",
     "run",
     "-mod=mod",
-    "ariga.io/atlas-provider-gorm",
+    "github.com/luantranminh/atlas-provider-gorm",
     "load",
     "--path", "./path/to/models",
     "--dialect", "mysql" // | postgres | sqlite | sqlserver
@@ -71,7 +71,7 @@ for tracking dependencies of tools and add a file named `tools.go` with the foll
 //go:build tools
 package main
 
-import _ "ariga.io/atlas-provider-gorm/gormschema"
+import _ "github.com/luantranminh/atlas-provider-gorm/gormschema"
 ```
 Alternatively, you can simply add a blank import to the `models.go` file we created
 above.
@@ -95,7 +95,7 @@ import (
   "io"
   "os"
 
-  "ariga.io/atlas-provider-gorm/gormschema"
+  "github.com/luantranminh/atlas-provider-gorm/gormschema"
   _ "ariga.io/atlas/sdk/recordriver"
   "github.com/<yourorg>/<yourrepo>/path/to/models"
 )
@@ -350,7 +350,7 @@ The provider supports the following databases:
       "go",
       "run",
       "-mod=mod",
-      "ariga.io/atlas-provider-gorm",
+      "github.com/luantranminh/atlas-provider-gorm",
       "load",
       "--path", "./models",
       "--dialect", "postgres",
